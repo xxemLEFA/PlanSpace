@@ -1,0 +1,46 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PlanSpace Flight</title>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div id="lock-box">
+      <div id="lockBoxText" class="lock-box-text"></div>
+    </div>
+    <div id="ui">
+      <div class="topbar">
+        <div class="title" data-i18n="title"></div>
+        <div class="lang">
+          <button id="lang-en" class="chip">EN</button>
+          <button id="lang-zh" class="chip">中文</button>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="label" data-i18n="missionTitle"></div>
+        <div id="missionText" class="value"></div>
+        <div id="statusText" class="value"></div>
+        <div id="timerText" class="value"></div>
+        <div id="weaponText" class="value"></div>
+        <div class="hint" data-i18n="controls"></div>
+      </div>
+      <div class="panel leaderboard">
+        <div class="label" data-i18n="leaderboardTitle"></div>
+        <div id="leaderboardList" class="value"></div>
+      </div>
+      <div id="toast"></div>
+      <button id="test-complete" class="chip">TEST COMPLETE</button>
+      <div id="debug"></div>
+      <div id="minimap-wrap">
+        <div class="label" data-i18n="radar"></div>
+        <button id="minimap-toggle" class="chip"></button>
+        <canvas id="minimap-2d"></canvas>
+        <canvas id="minimap-3d"></canvas>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
+
