@@ -1,5 +1,7 @@
 # PlanSpace Flight
 
+English README. 中文请看 `README_zh.md`.
+
 Three.js flight game prototype with missions, weapons, minimap (2D/3D), and a MySQL-backed leaderboard.
 
 ## Requirements
