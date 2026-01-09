@@ -2,6 +2,8 @@ import * as THREE from "three";
 
 export function buildPlane() {
   const group = new THREE.Group();
+  const modelRoot = new THREE.Group();
+  modelRoot.name = "modelRoot";
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(1.8, 0.7, 4.5),
     new THREE.MeshStandardMaterial({ color: 0x4cc3ff, metalness: 0.2, roughness: 0.4 })
@@ -26,6 +28,8 @@ export function buildPlane() {
   );
   engine.rotation.x = Math.PI / 2;
   engine.position.set(0, 0, 2.2);
+
+  modelRoot.add(body, wing, fin, engine);
 
   const flameGeo = new THREE.ConeGeometry(0.35, 1.2, 16);
   const accelMat = new THREE.MeshStandardMaterial({
@@ -55,6 +59,6 @@ export function buildPlane() {
   brakeFlame.scale.set(0.001, 0.001, 0.001);
   brakeFlame.name = "brakeFlame";
 
-  group.add(body, wing, fin, engine, accelFlame, brakeFlame);
+  group.add(modelRoot, accelFlame, brakeFlame);
   return group;
 }

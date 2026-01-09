@@ -11,6 +11,7 @@ import { clamp, randomRange } from "./game/utils.js";
 import { createUI } from "./game/ui.js";
 import { createChaseCamera } from "./game/camera.js";
 import { createMissiles } from "./game/missiles.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 export function initGame(canvas, ui) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -37,6 +38,7 @@ export function initGame(canvas, ui) {
   const plane = buildPlane();
   plane.position.set(0, 4, 0);
   scene.add(plane);
+  loadPlayerModel();
 
   const state = {
     speed: 22,
@@ -120,10 +122,15 @@ export function initGame(canvas, ui) {
   const lockConfig = {
     range: 120,
     minDot: 0.86,
-    time: 1.3
+    time: 0.8
   };
   const lockVec = new THREE.Vector3();
   const clock = new THREE.Clock();
+  const mixers = [];
+  const enableModelAnimations = false;
+  const animationNodeFilter = ["Point001"];
+  let modelFlame = null;
+  let flameTime = 0;
 
   uiController.update();
   minimap2d.resize();
@@ -157,6 +164,8 @@ export function initGame(canvas, ui) {
     const dt = Math.min(clock.getDelta(), 0.05);
 
     if (!state.over) {
+      mixers.forEach((mixer) => mixer.update(dt));
+      updateModelFlame(dt);
       updateTimer(dt);
       updatePlane(dt);
       gates.update();
@@ -208,6 +217,98 @@ export function initGame(canvas, ui) {
     }
 
     thrusters.update(throttle, dt);
+  }
+
+  function loadPlayerModel() {
+    const loader = new GLTFLoader();
+    const url = "/models/Baked_Animations_Intergalactic_Spaceships_Version_2/GLB/Baked_Animations_Intergalactic_Spaceships_Version_2.glb";
+    const modelRoot = plane.getObjectByName("modelRoot");
+    if (!modelRoot) return;
+    loader.load(
+      url,
+      (gltf) => {
+        modelRoot.clear();
+        const model = gltf.scene;
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = false;
+            child.receiveShadow = false;
+          }
+        });
+
+        model.rotation.y = Math.PI;
+        fitModel(model, 7.2);
+        modelRoot.add(model);
+        repositionThrusters(model);
+        modelFlame = findFlameNode(model);
+
+        if (enableModelAnimations && gltf.animations && gltf.animations.length) {
+          const mixer = new THREE.AnimationMixer(model);
+          const filtered = gltf.animations.map((clip) => {
+            const tracks = clip.tracks.filter((track) => {
+              return animationNodeFilter.some((name) => track.name.startsWith(name));
+            });
+            return tracks.length ? new THREE.AnimationClip(`${clip.name}-filtered`, clip.duration, tracks) : null;
+          }).filter(Boolean);
+          if (filtered.length) {
+            filtered.forEach((clip) => mixer.clipAction(clip).play());
+          } else {
+            gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+          }
+          mixers.push(mixer);
+        }
+      },
+      undefined,
+      (err) => {
+        console.error("Failed to load player model:", err);
+      }
+    );
+  }
+
+  function fitModel(model, targetLength) {
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    const scale = size.z > 0 ? targetLength / size.z : 1;
+    model.scale.setScalar(scale);
+    model.position.sub(center.multiplyScalar(scale));
+  }
+
+  function repositionThrusters(model) {
+    const box = new THREE.Box3().setFromObject(model);
+    const maxZ = box.max.z;
+    const accelFlame = plane.getObjectByName("accelFlame");
+    const brakeFlame = plane.getObjectByName("brakeFlame");
+    if (accelFlame) {
+      accelFlame.position.set(0, 0, maxZ + 0.7);
+    }
+    if (brakeFlame) {
+      brakeFlame.position.set(0, 0, maxZ + 0.4);
+    }
+  }
+
+  function findFlameNode(model) {
+    let found = null;
+    model.traverse((child) => {
+      if (found || !child.name) return;
+      if (child.name.includes("Point001") || child.name.toLowerCase().includes("flame")) {
+        found = child;
+      }
+    });
+    return found;
+  }
+
+  function updateModelFlame(dt) {
+    if (!modelFlame) return;
+    flameTime += dt;
+    const pulse = 0.7 + 0.3 * Math.sin(flameTime * 6);
+    modelFlame.scale.setScalar(1 + pulse * 0.25);
+    if (modelFlame.material && modelFlame.material.emissive) {
+      modelFlame.material.emissiveIntensity = 0.6 + pulse * 1.2;
+      modelFlame.material.needsUpdate = true;
+    }
   }
 
   function updateTimer(dt) {
