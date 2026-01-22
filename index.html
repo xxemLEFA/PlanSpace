@@ -10,6 +10,31 @@
     <div id="lock-box">
       <div id="lockBoxText" class="lock-box-text"></div>
     </div>
+    <div id="menu">
+      <div class="menu-card">
+        <div class="menu-title" data-i18n="menuTitle"></div>
+        <div class="menu-subtitle" data-i18n="menuSubtitle"></div>
+        <div class="menu-lang">
+          <button id="menu-lang-en" class="chip">EN</button>
+          <button id="menu-lang-zh" class="chip">中文</button>
+        </div>
+        <div class="menu-levels">
+          <button class="menu-level" data-level="0">
+            <div class="menu-level-title" data-i18n="level1Title"></div>
+            <div class="menu-level-desc" data-i18n="level1Desc"></div>
+          </button>
+          <button class="menu-level" data-level="1">
+            <div class="menu-level-title" data-i18n="level2Title"></div>
+            <div class="menu-level-desc" data-i18n="level2Desc"></div>
+          </button>
+          <button class="menu-level" data-level="2">
+            <div class="menu-level-title" data-i18n="level3Title"></div>
+            <div class="menu-level-desc" data-i18n="level3Desc"></div>
+          </button>
+        </div>
+        <button id="menu-confirm" class="chip" disabled></button>
+      </div>
+    </div>
     <div id="ui">
       <div class="topbar">
         <div class="title" data-i18n="title"></div>
@@ -22,6 +47,8 @@
         <div class="label" data-i18n="missionTitle"></div>
         <div id="missionText" class="value"></div>
         <div id="statusText" class="value"></div>
+        <div id="levelText" class="value"></div>
+        <div id="sideText" class="value"></div>
         <div id="timerText" class="value"></div>
         <div id="weaponText" class="value"></div>
         <div class="hint" data-i18n="controls"></div>

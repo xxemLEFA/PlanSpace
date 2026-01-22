@@ -28,6 +28,20 @@ export function createUI(ui, state) {
       total: state.total,
       hp: state.hp
     });
+    if (ui.elements.levelText) {
+      ui.elements.levelText.textContent = ui.t("level", { level: state.levelIndex + 1 });
+    }
+    if (ui.elements.sideText) {
+      if (state.sideStatus === "complete") {
+        ui.elements.sideText.textContent = ui.t("sideComplete");
+      } else if (state.sideStatus === "failed") {
+        ui.elements.sideText.textContent = ui.t("sideFailed");
+      } else {
+        ui.elements.sideText.textContent = ui.t("sideMission", {
+          time: Math.max(0, Math.ceil(state.sideTimeRemaining))
+        });
+      }
+    }
     if (ui.elements.weaponText) {
       ui.elements.weaponText.textContent = ui.t("weapon", {
         weapon: ui.t(state.weaponLabel),

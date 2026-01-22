@@ -48,8 +48,12 @@ export function initGame(canvas, ui) {
     hp: 3,
     passed: 0,
     total: 0,
-    gatesPassedTotal: 0,
     enemiesRemaining: 0,
+    levelIndex: 0,
+    menuActive: true,
+    sideTimeRemaining: 70,
+    sideStatus: "active",
+    sideGatesPassed: 0,
     timerMs: 0,
     timerRunning: true,
     completed: false,
@@ -65,9 +69,18 @@ export function initGame(canvas, ui) {
   const minimap3dCanvas = document.getElementById("minimap-3d");
   const minimapToggle = document.getElementById("minimap-toggle");
   const debugEl = document.getElementById("debug");
+  const menu = document.getElementById("menu");
+  const menuConfirm = document.getElementById("menu-confirm");
+  const menuLevels = document.querySelectorAll(".menu-level");
   const minimap2d = createMinimap2D({ canvas: minimap2dCanvas, plane });
   const minimap3d = createMinimap({ canvas: minimap3dCanvas, plane, debugEl });
   let minimapMode = "2d";
+  const levels = [
+    { enemyCount: 5, trackRange: 45, fireInterval: 2.2, bulletSpeed: 26, speedMin: 10, speedMax: 14 },
+    { enemyCount: 8, trackRange: 60, fireInterval: 1.5, bulletSpeed: 32, speedMin: 12, speedMax: 17 },
+    { enemyCount: 12, trackRange: 80, fireInterval: 1.0, bulletSpeed: 38, speedMin: 14, speedMax: 20 }
+  ];
+  const sideConfig = { time: 70 };
 
   const gates = createGates({
     scene,
@@ -77,8 +90,13 @@ export function initGame(canvas, ui) {
     randomRange,
     onUpdate: () => uiController.update(),
     onPass: () => {
-      state.gatesPassedTotal += 1;
-      checkCompletion();
+      if (state.sideStatus !== "active") return;
+      state.sideGatesPassed += 1;
+      if (state.sideGatesPassed >= gates.count) {
+        state.sideStatus = "complete";
+        state.sideTimeRemaining = 0;
+        uiController.update();
+      }
     }
   });
   state.total = gates.count;
@@ -87,7 +105,7 @@ export function initGame(canvas, ui) {
     scene,
     plane,
     state,
-    count: 10,
+    count: Math.max(...levels.map((level) => level.enemyCount)),
     randomRange,
     minimaps: [minimap2d, minimap3d],
     onHit: () => {
@@ -99,10 +117,10 @@ export function initGame(canvas, ui) {
     },
     onDisable: () => {
       state.enemiesRemaining = Math.max(0, state.enemiesRemaining - 1);
-      checkCompletion();
+      checkLevelCompletion();
     }
   });
-  state.enemiesRemaining = enemies.enemies.length;
+  state.enemiesRemaining = levels[0].enemyCount;
 
   const bullets = createBullets({ scene, plane });
   const missiles = createMissiles({ scene, plane });
@@ -137,16 +155,19 @@ export function initGame(canvas, ui) {
   minimap3d.resize();
   setMinimapMode(minimapMode);
   loadLeaderboard();
+  initMenu();
 
   function resetGame() {
     state.hp = 3;
     state.passed = 0;
-    state.gatesPassedTotal = 0;
     state.over = false;
     state.speed = 22;
-    state.enemiesRemaining = enemies.enemies.length;
+    state.enemiesRemaining = levels[state.levelIndex].enemyCount;
+    state.sideTimeRemaining = sideConfig.time;
+    state.sideStatus = "active";
+    state.sideGatesPassed = 0;
     state.timerMs = 0;
-    state.timerRunning = true;
+    state.timerRunning = !state.menuActive;
     state.completed = false;
     state.forward.set(0, 0, -1).applyQuaternion(plane.quaternion);
     plane.position.set(0, 4, 0);
@@ -157,16 +178,18 @@ export function initGame(canvas, ui) {
     missiles.reset();
     lockState.target = null;
     lockState.progress = 0;
+    startLevel(state.levelIndex, false);
     uiController.update();
   }
 
   function animate() {
     const dt = Math.min(clock.getDelta(), 0.05);
 
-    if (!state.over) {
+    if (!state.over && !state.menuActive) {
       mixers.forEach((mixer) => mixer.update(dt));
       updateModelFlame(dt);
       updateTimer(dt);
+      updateSideMission(dt);
       updatePlane(dt);
       gates.update();
       enemies.update(dt);
@@ -315,6 +338,14 @@ export function initGame(canvas, ui) {
     if (!state.timerRunning) return;
     state.timerMs += dt * 1000;
     uiController.update();
+  }
+
+  function updateSideMission(dt) {
+    if (state.sideStatus !== "active") return;
+    state.sideTimeRemaining = Math.max(0, state.sideTimeRemaining - dt);
+    if (state.sideTimeRemaining <= 0) {
+      state.sideStatus = "failed";
+    }
   }
 
   function handleWeaponSwitch() {
@@ -495,8 +526,6 @@ export function initGame(canvas, ui) {
 
   function checkCompletion() {
     if (state.completed) return;
-    if (state.enemiesRemaining > 0) return;
-    if (state.gatesPassedTotal < 2) return;
     state.completed = true;
     state.timerRunning = false;
     uiController.update();
@@ -504,6 +533,95 @@ export function initGame(canvas, ui) {
     if (name) {
       submitScore(name, Math.round(state.timerMs));
     }
+    openMenu();
+  }
+
+  function startLevel(index, showToastMessage = true) {
+    const level = levels[index];
+    if (!level) return;
+    state.levelIndex = index;
+    state.enemiesRemaining = level.enemyCount;
+    state.sideTimeRemaining = sideConfig.time;
+    state.sideStatus = "active";
+    state.sideGatesPassed = 0;
+    state.passed = 0;
+    gates.resetAll();
+    enemies.setDifficulty(level);
+    enemies.setActiveCount(level.enemyCount);
+    if (showToastMessage) {
+      showToast(ui.t("levelStart", { level: index + 1 }));
+    }
+    uiController.update();
+  }
+
+  function checkLevelCompletion() {
+    if (state.enemiesRemaining > 0) return;
+    showToast(ui.t("levelClear", { level: state.levelIndex + 1 }));
+    checkCompletion();
+  }
+
+  function initMenu() {
+    if (!menu) return;
+    menu.style.display = "flex";
+    if (menuConfirm) {
+      menuConfirm.textContent = ui.t("menuConfirm");
+      menuConfirm.disabled = true;
+    }
+    menuLevels.forEach((button) => {
+      button.addEventListener("click", () => {
+        menuLevels.forEach((item) => item.classList.remove("selected"));
+        button.classList.add("selected");
+        const levelIndex = Number(button.dataset.level || 0);
+        state.levelIndex = levelIndex;
+        if (menuConfirm) {
+          menuConfirm.disabled = false;
+          menuConfirm.textContent = ui.t("menuConfirmLevel", { level: levelIndex + 1 });
+        }
+      });
+    });
+    if (menuConfirm) {
+      menuConfirm.addEventListener("click", () => {
+        startSelectedLevel();
+      });
+    }
+    state.menuActive = true;
+    updateMenuVisibility();
+    updateMenuText();
+  }
+
+  function updateMenuVisibility() {
+    if (!menu) return;
+    menu.style.display = state.menuActive ? "flex" : "none";
+  }
+
+  function openMenu() {
+    state.menuActive = true;
+    state.timerRunning = false;
+    updateMenuVisibility();
+    if (menuConfirm) {
+      menuConfirm.disabled = true;
+      menuConfirm.textContent = ui.t("menuConfirm");
+    }
+    menuLevels.forEach((item) => item.classList.remove("selected"));
+    updateMenuText();
+  }
+
+  function startSelectedLevel() {
+    state.menuActive = false;
+    state.timerRunning = true;
+    state.completed = false;
+    state.over = false;
+    state.hp = 3;
+    state.speed = 22;
+    state.forward.set(0, 0, -1).applyQuaternion(plane.quaternion);
+    plane.position.set(0, 4, 0);
+    plane.quaternion.identity();
+    bullets.reset();
+    missiles.reset();
+    lockState.target = null;
+    lockState.progress = 0;
+    startLevel(state.levelIndex, false);
+    updateMenuVisibility();
   }
 
   function onResize() {
@@ -524,8 +642,7 @@ export function initGame(canvas, ui) {
   if (testComplete) {
     testComplete.addEventListener("click", () => {
       state.enemiesRemaining = 0;
-      state.gatesPassedTotal = 2;
-      checkCompletion();
+      checkLevelCompletion();
     });
   }
 
@@ -538,9 +655,12 @@ export function initGame(canvas, ui) {
 
   const langEn = document.getElementById("lang-en");
   const langZh = document.getElementById("lang-zh");
+  const menuLangEn = document.getElementById("menu-lang-en");
+  const menuLangZh = document.getElementById("menu-lang-zh");
   if (langEn) {
     langEn.addEventListener("click", () => {
       updateMinimapLabel();
+      updateMenuText();
       uiController.update();
       loadLeaderboard();
     });
@@ -548,8 +668,19 @@ export function initGame(canvas, ui) {
   if (langZh) {
     langZh.addEventListener("click", () => {
       updateMinimapLabel();
+      updateMenuText();
       uiController.update();
       loadLeaderboard();
+    });
+  }
+  if (menuLangEn) {
+    menuLangEn.addEventListener("click", () => {
+      document.getElementById("lang-en")?.click();
+    });
+  }
+  if (menuLangZh) {
+    menuLangZh.addEventListener("click", () => {
+      document.getElementById("lang-zh")?.click();
     });
   }
 
@@ -577,5 +708,14 @@ export function initGame(canvas, ui) {
   function updateMinimapLabel() {
     if (!minimapToggle) return;
     minimapToggle.textContent = minimapMode === "2d" ? ui.t("map2d") : ui.t("map3d");
+  }
+
+  function updateMenuText() {
+    if (!menuConfirm) return;
+    if (menuConfirm.disabled) {
+      menuConfirm.textContent = ui.t("menuConfirm");
+      return;
+    }
+    menuConfirm.textContent = ui.t("menuConfirmLevel", { level: state.levelIndex + 1 });
   }
 }
