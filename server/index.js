@@ -7,12 +7,21 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const env = {
+  port: Number(process.env.PORT || 3000),
+  dbHost: process.env.DB_HOST || "localhost",
+  dbPort: Number(process.env.DB_PORT || 3306),
+  dbUser: process.env.DB_USER || "root",
+  dbPassword: process.env.DB_PASSWORD || "",
+  dbName: process.env.DB_NAME || "threejs_planspace"
+};
+
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || "localhost",
-  port: Number(process.env.DB_PORT || 3306),
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "threejs_planspace",
+  host: env.dbHost,
+  port: env.dbPort,
+  user: env.dbUser,
+  password: env.dbPassword,
+  database: env.dbName,
   connectionLimit: 10
 });
 
@@ -60,7 +69,34 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-const port = Number(process.env.PORT || 3000);
-app.listen(port, () => {
-  console.log(`PlanSpace server listening on ${port}`);
+function reportEnv() {
+  const missing = [];
+  if (!process.env.DB_HOST) missing.push("DB_HOST");
+  if (!process.env.DB_PORT) missing.push("DB_PORT");
+  if (!process.env.DB_USER) missing.push("DB_USER");
+  if (!process.env.DB_NAME) missing.push("DB_NAME");
+  if (missing.length) {
+    console.warn(`[env] Missing ${missing.join(", ")}; using defaults.`);
+  }
+  if (!process.env.DB_PASSWORD) {
+    console.warn("[env] DB_PASSWORD is empty; using blank password.");
+  }
+}
+
+async function verifyDatabase() {
+  try {
+    await pool.query("SELECT 1");
+    console.log("[db] connection OK");
+  } catch (err) {
+    console.error("[db] connection failed:", err?.code || err?.message || err);
+  }
+}
+
+reportEnv();
+verifyDatabase();
+
+app.listen(env.port, () => {
+  console.log(`PlanSpace server listening on http://localhost:${env.port}`);
+  console.log(`Health check: http://localhost:${env.port}/api/health`);
+  console.log("Frontend (Vite dev): http://localhost:5173");
 });

@@ -14,6 +14,7 @@ import { createMissiles } from "./game/missiles.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 export function initGame(canvas, ui) {
+  // Core renderer + scene setup.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -24,10 +25,14 @@ export function initGame(canvas, ui) {
 
   const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+  // Lighting: ambient + directional + a distant star.
   const ambient = new THREE.AmbientLight(0x9fb3ff, 0.6);
   const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
   dirLight.position.set(20, 40, 30);
   scene.add(ambient, dirLight);
+
+  const star = buildStar();
+  scene.add(star.mesh, star.light);
 
   const grid = new THREE.GridHelper(500, 80, 0x2b3a5e, 0x18233a);
   grid.position.y = -6;
@@ -35,6 +40,7 @@ export function initGame(canvas, ui) {
   grid.material.transparent = true;
   scene.add(grid);
 
+  // Player vehicle (placeholder mesh replaced by GLB if available).
   const plane = buildPlane();
   plane.position.set(0, 4, 0);
   scene.add(plane);
@@ -65,6 +71,7 @@ export function initGame(canvas, ui) {
     lockPercent: 0
   };
 
+  // UI surfaces / overlays.
   const minimap2dCanvas = document.getElementById("minimap-2d");
   const minimap3dCanvas = document.getElementById("minimap-3d");
   const minimapToggle = document.getElementById("minimap-toggle");
@@ -75,6 +82,7 @@ export function initGame(canvas, ui) {
   const minimap2d = createMinimap2D({ canvas: minimap2dCanvas, plane });
   const minimap3d = createMinimap({ canvas: minimap3dCanvas, plane, debugEl });
   let minimapMode = "2d";
+  // Linear level data: enemy counts + difficulty curve.
   const levels = [
     { enemyCount: 5, trackRange: 45, fireInterval: 2.2, bulletSpeed: 26, speedMin: 10, speedMax: 14 },
     { enemyCount: 8, trackRange: 60, fireInterval: 1.5, bulletSpeed: 32, speedMin: 12, speedMax: 17 },
@@ -82,6 +90,7 @@ export function initGame(canvas, ui) {
   ];
   const sideConfig = { time: 70 };
 
+  // Gates support the side objective (time-limited clear).
   const gates = createGates({
     scene,
     plane,
@@ -101,6 +110,7 @@ export function initGame(canvas, ui) {
   });
   state.total = gates.count;
 
+  // Enemies handle pursuit + firing; we activate a subset per level.
   const enemies = createEnemies({
     scene,
     plane,
@@ -122,6 +132,7 @@ export function initGame(canvas, ui) {
   });
   state.enemiesRemaining = levels[0].enemyCount;
 
+  // Player weapons + controls.
   const bullets = createBullets({ scene, plane });
   const missiles = createMissiles({ scene, plane });
   const thrusters = createThrusters({ scene, plane });
@@ -133,6 +144,7 @@ export function initGame(canvas, ui) {
   const toast = document.getElementById("toast");
   const leaderboardList = document.getElementById("leaderboardList");
   let toastTimer = null;
+  // Missile lock state.
   const lockState = {
     target: null,
     progress: 0
@@ -143,6 +155,7 @@ export function initGame(canvas, ui) {
     time: 0.8
   };
   const lockVec = new THREE.Vector3();
+  // Main frame clock.
   const clock = new THREE.Clock();
   const mixers = [];
   const enableModelAnimations = false;
@@ -182,6 +195,7 @@ export function initGame(canvas, ui) {
     uiController.update();
   }
 
+  // Main loop: update sim, UI, and render.
   function animate() {
     const dt = Math.min(clock.getDelta(), 0.05);
 
@@ -218,6 +232,7 @@ export function initGame(canvas, ui) {
     requestAnimationFrame(animate);
   }
 
+  // Player kinematics.
   function updatePlane(dt) {
     const pitch = (input.pitchUp - input.pitchDown) * 1.1 * dt;
     const roll = (input.rollRight - input.rollLeft) * 1.6 * dt;
@@ -242,6 +257,24 @@ export function initGame(canvas, ui) {
     thrusters.update(throttle, dt);
   }
 
+  function buildStar() {
+    const geometry = new THREE.SphereGeometry(140, 48, 48);
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xfff1c2,
+      emissive: 0xffc96b,
+      emissiveIntensity: 3.8
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(900, 520, -1500);
+
+    const light = new THREE.PointLight(0xffe2a0, 3.2, 2600, 1.1);
+    light.position.copy(mesh.position);
+
+    return { mesh, light };
+  }
+  
+
+  // Load GLB model to replace the placeholder mesh.
   function loadPlayerModel() {
     const loader = new GLTFLoader();
     const url = "/models/Baked_Animations_Intergalactic_Spaceships_Version_2/GLB/Baked_Animations_Intergalactic_Spaceships_Version_2.glb";
@@ -334,6 +367,7 @@ export function initGame(canvas, ui) {
     }
   }
 
+  // Global run timer (stops on completion/menu).
   function updateTimer(dt) {
     if (!state.timerRunning) return;
     state.timerMs += dt * 1000;
@@ -369,6 +403,7 @@ export function initGame(canvas, ui) {
     }
   }
 
+  // Missile lock acquisition.
   function updateLock(dt) {
     if (state.weapon !== "missile") {
       state.lockLabel = "lockNone";
@@ -490,6 +525,7 @@ export function initGame(canvas, ui) {
     return `${String(minutes).padStart(2, "0")}:${seconds.toFixed(2).padStart(5, "0")}`;
   }
 
+  // Fetch leaderboard entries for the HUD panel.
   async function loadLeaderboard() {
     if (!leaderboardList) return;
     try {
@@ -511,6 +547,7 @@ export function initGame(canvas, ui) {
     }
   }
 
+  // Submit a score entry to the backend.
   async function submitScore(name, timeMs) {
     try {
       await fetch("/api/score", {
@@ -524,6 +561,7 @@ export function initGame(canvas, ui) {
     loadLeaderboard();
   }
 
+  // End-of-level flow: stop timer, prompt name, submit score, return to menu.
   function checkCompletion() {
     if (state.completed) return;
     state.completed = true;
@@ -536,6 +574,7 @@ export function initGame(canvas, ui) {
     openMenu();
   }
 
+  // Start a specific level (no auto-advance).
   function startLevel(index, showToastMessage = true) {
     const level = levels[index];
     if (!level) return;
@@ -560,6 +599,7 @@ export function initGame(canvas, ui) {
     checkCompletion();
   }
 
+  // Menu wiring: selection + confirmation.
   function initMenu() {
     if (!menu) return;
     menu.style.display = "flex";
@@ -589,11 +629,13 @@ export function initGame(canvas, ui) {
     updateMenuText();
   }
 
+  // Show/hide menu overlay based on state.
   function updateMenuVisibility() {
     if (!menu) return;
     menu.style.display = state.menuActive ? "flex" : "none";
   }
-
+  
+  // Return to menu after a run.
   function openMenu() {
     state.menuActive = true;
     state.timerRunning = false;
@@ -606,6 +648,7 @@ export function initGame(canvas, ui) {
     updateMenuText();
   }
 
+  // Start the chosen level and clear transient state.
   function startSelectedLevel() {
     state.menuActive = false;
     state.timerRunning = true;
@@ -624,6 +667,7 @@ export function initGame(canvas, ui) {
     updateMenuVisibility();
   }
 
+  // Resize handler for renderer + minimaps.
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -633,12 +677,14 @@ export function initGame(canvas, ui) {
   }
 
   window.addEventListener("resize", onResize);
+  // Quick reset for testing.
   window.addEventListener("keydown", (event) => {
     if (event.code === "KeyR") {
       resetGame();
     }
   });
   const testComplete = document.getElementById("test-complete");
+  // Dev button to finish the level immediately.
   if (testComplete) {
     testComplete.addEventListener("click", () => {
       state.enemiesRemaining = 0;
@@ -646,6 +692,7 @@ export function initGame(canvas, ui) {
     });
   }
 
+  // Toggle between 2D/3D minimap modes.
   if (minimapToggle) {
     minimapToggle.addEventListener("click", () => {
       minimapMode = minimapMode === "2d" ? "3d" : "2d";
@@ -657,6 +704,7 @@ export function initGame(canvas, ui) {
   const langZh = document.getElementById("lang-zh");
   const menuLangEn = document.getElementById("menu-lang-en");
   const menuLangZh = document.getElementById("menu-lang-zh");
+  // Language buttons: sync UI labels.
   if (langEn) {
     langEn.addEventListener("click", () => {
       updateMinimapLabel();
